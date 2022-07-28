@@ -1,8 +1,8 @@
 #pragma once
 #include "ShaiSock.h"
 
-////////////////////////////FTPCLIENT///////////////////////////////
 namespace SHAIFTP{
+    ////////////////////////////FTPCLIENTCONTROL///////////////////////////////
     class FTPCLIENTCONTROL:public SHAISOCK::CLIENTSOCK{
         std::u8string user;
         std::u8string pass;
@@ -57,15 +57,23 @@ namespace SHAIFTP{
         );
         ~FTPCLIENTCONTROL();
         void setFtpCommand(std::u8string command);
-        bool login();
+        unsigned short getFtpCommandLength();
+        void login();
         unsigned int enterPASV();
+        void enterBinaryMode();
         void writeResponseCode(char* responseCodeToWrite);
         bool checkReponseCode(char* codeToCheck);
         char* getResponseCode();
+        bool confirmFileSizeTransfer(const std::u8string& serverPath, const std::wstring& localFilePath);
         char* getRecBuff();
-        unsigned short getFtpCommandLength();
+    
+        private:
+        static bool compareStrToCharStr(std::string str,char* charStr);
     };
+    ////////////////////////////FTPCLIENTCONTROL///////////////////////////////
+    
 
+    ////////////////////////////FTPCLIENTDATA///////////////////////////////
     class FTPCLIENTDATA:public SHAISOCK::CLIENTSOCK{
         std::wstring localPath;
         public:
@@ -82,12 +90,15 @@ namespace SHAIFTP{
         );
         ~FTPCLIENTDATA();
         void close();
-        void getFile();
-        void putFile();
+        bool getFile();
+        bool putFile();
         void setLocalPath(std::wstring& localPath);
         void printRecBuffBase10();
     };
+    ////////////////////////////FTPCLIENTDATA///////////////////////////////
 
+
+    ////////////////////////////FTPCLIENT///////////////////////////////
     enum DOMAINFLAG{domainFlag};
     class FTPCLIENT{
         FTPCLIENTCONTROL ftpClientControl;
@@ -114,5 +125,6 @@ namespace SHAIFTP{
         short getFile(const std::u8string pathFromServer,const std::wstring localTargetPath);
         short putFile(const std::wstring localPath, const std::u8string serverPath);
     };
+    ////////////////////////////FTPCLIENT///////////////////////////////
+    
 }
-////////////////////////////FTPCLIENT///////////////////////////////

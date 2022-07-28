@@ -8,6 +8,8 @@
 //5 - Socket connect error
 //6 - DNS resolve error
 //7 - DNS resolve error
+//8 - IP Address passed to domain constructor
+
 
 
 /////////////////////////////BASE INITSOCK//////////////////////////////
@@ -21,8 +23,11 @@ SHAISOCK::INITSOCK::INITSOCK(WINSOCKVERSION winSockVersion){
         
         default:throw 1;break;
     }
-    if(!checkVersion())throw 1;
-    if((WSAStartup((MAKEWORD(version[0],version[1])),&wsaData))!=0)throw 2;
+    if(!checkVersion())throw exception;
+    if((WSAStartup((MAKEWORD(version[0],version[1])),&wsaData))!=0){
+        exception.code=2;exception.errorStr="Winsock initialization error";
+        throw exception;
+    }
     #ifdef DEBUG
     std::cout<<"Constructed Initsock"<<std::endl;
     #endif
@@ -73,13 +78,13 @@ SHAISOCK::CLIENTSOCK::CLIENTSOCK(
 recBuffSize{recBuffSize},sendBuffSize{sendBuffSize},
 recBuff{new char[recBuffSize]{}},sendBuff{new char[sendBuffSize]{}}{
     sock = socket(addrFamily,sockType,socProtocol);
-    if(sock==INVALID_SOCKET)throw 3;
+    if(sock==INVALID_SOCKET){exception.code=3;exception.errorStr="Create socket error";throw exception;}
     sockAddr.sin_family = addrFamily;
     sockAddr.sin_port = htons(port);
     int returnVal{InetPtonW(addrFamily,this->ipAddress.data(),&sockAddr.sin_addr)};
-    if(returnVal!=1)throw 4;
+    if(returnVal!=1){exception.code=4;exception.errorStr="Inetptow error";throw exception;}
     returnVal = connect(sock,reinterpret_cast<sockaddr*>(&sockAddr),sizeof(sockAddr));
-    if(returnVal!=0)throw 5;
+    if(returnVal!=0){exception.code=5;exception.errorStr="Socket connect error";throw exception;}
     #ifdef DEBUG
     std::cout<<"Constructed ClientSock\nSock connected"<<std::endl;
     #endif
@@ -95,18 +100,28 @@ SHAISOCK::CLIENTSOCK::CLIENTSOCK(
     unsigned int sendBuffSize
 ):SHAISOCK::INITSOCK(winSockVersion),recBuffSize{recBuffSize},sendBuffSize{sendBuffSize},
 recBuff{new char[recBuffSize]{}},sendBuff{new char[sendBuffSize]{}}{
+    if(!checkDomainIsNotIP(serverDomain)){
+        exception.code=8;exception.errorStr="IP passed to domain constructor error";
+        throw exception;
+    }
     ipAddress = resolveToIPv4(serverDomain);
     #ifdef DEBUG
     std::wcout<<L"IP Address to convert: "<<ipAddress<<std::endl;
     #endif
     sock = socket(addrFamily,sockType,socProtocol);
-    if(sock==INVALID_SOCKET)throw 3;
+    if(sock==INVALID_SOCKET){
+        exception.code=3;exception.errorStr="Create socket error";
+        throw exception;
+    }
     sockAddr.sin_family = addrFamily;
     sockAddr.sin_port = htons(port);
     int returnVal{InetPtonW(addrFamily,this->ipAddress.data(),&sockAddr.sin_addr)};
-    if(returnVal!=1)throw 4;
+    if(returnVal!=1){exception.code=4;exception.errorStr="Inetptow error";throw exception;}
     returnVal = connect(sock,reinterpret_cast<sockaddr*>(&sockAddr),sizeof(sockAddr));
-    if(returnVal!=0)throw 5;
+    if(returnVal!=0){
+        exception.code=5;exception.errorStr="Socket connect error";
+        throw exception;
+    }
     #ifdef DEBUG
     std::cout<<"Constructed ClientSock\nSock connected"<<std::endl;
     #endif
@@ -167,6 +182,13 @@ std::wstring SHAISOCK::CLIENTSOCK::getIpAddress(){return this->ipAddress;}
 /////////////////////////////BASIC CLIENTOSCK//////////////////////////////
 
 
+/////////////////////////////EXCEPTIONS//////////////////////////////
+SHAISOCK::EXCEPTION::EXCEPTION():code{},errorStr{}{}
+SHAISOCK::EXCEPTION::EXCEPTION(unsigned short code):code{code},errorStr{}{}
+SHAISOCK::EXCEPTION::EXCEPTION(std::string errorStr):code{},errorStr{errorStr}{}
+SHAISOCK::EXCEPTION::EXCEPTION(unsigned short code,std::string errorStr):code{code},errorStr{errorStr}{}
+/////////////////////////////EXCEPTIONS//////////////////////////////
+
 
 
 
@@ -185,7 +207,15 @@ void SHAISOCK::printCharArray(const char* const buff,const printType type,const 
         }
 }
 #endif
+bool SHAISOCK::checkDomainIsNotIP(std::wstring& domain){
+    for(unsigned short c{0};c<domain.size();++c){
+        if((domain[c]<48&&domain[c]!=46)||domain[c]>57)return 1;
+    }
+    return 0;
+}
+
 std::wstring SHAISOCK::resolveToIPv4(const std::wstring& domainName){
+    SHAISOCK::EXCEPTION exception{6,"DNS reslove error"};
 	addrinfoW hints{};
 	addrinfoW* addrResult{nullptr};
 	hints.ai_family = SHAISOCK_AF_UNSPEC;
@@ -201,7 +231,7 @@ std::wstring SHAISOCK::resolveToIPv4(const std::wstring& domainName){
 	};
     if(resolveResult!=0){
         std::cout<<"Winsock Resolve Error: "<<resolveResult<<std::endl;
-        throw 6;
+        throw exception;
     }
 	if(addrResult->ai_family == SHAISOCK_AF_INET){
         unsigned short length{static_cast<unsigned short>(addrResult->ai_addrlen)};
@@ -215,5 +245,6 @@ std::wstring SHAISOCK::resolveToIPv4(const std::wstring& domainName){
         }
         return serverAddrW;
     }
-    else throw 7;
+    else {exception.code=7;throw exception;}
 }
+/////////////////////////////HELPER FUNCTIONS//////////////////////////////

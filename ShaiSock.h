@@ -8,11 +8,21 @@ namespace SHAISOCK{
     enum WINSOCKVERSION{One,OneOne,Two,TwoOne,TwoTwo};
 
 /////////////////////////INITSOCK AND CLIENTSOCK////////////////////////
+    struct EXCEPTION{
+        unsigned short code;
+        std::string errorStr;
+        EXCEPTION();
+        EXCEPTION(unsigned short code);
+        EXCEPTION(std::string errorStr);
+        EXCEPTION(unsigned short code,std::string errorStr);
+    };
+    
     class INITSOCK{
         WSADATA wsaData;
         unsigned char version[2]{};
-        
+
         public:
+        EXCEPTION exception{1,"Version error"};
         INITSOCK(WINSOCKVERSION winSockVersion);
         ~INITSOCK();
         bool checkVersion();
@@ -69,5 +79,6 @@ namespace SHAISOCK{
     enum printType{character, base10};
     void printCharArray(const char* const buff,const printType type,const unsigned int size);
     #endif
+    bool checkDomainIsNotIP(std::wstring& domain);
     std::wstring resolveToIPv4(const std::wstring& domainName);
 }

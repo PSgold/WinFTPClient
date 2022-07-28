@@ -1,9 +1,9 @@
 #include "ShaiFtp.h"
 //Exceptions thrown on construction
-//8 - login failure
+//20 - login failure
 
 //Other Exceptions
-//9 - Failed to enter passive mode 
+//21 - Failed to enter passive mode 
 
 /////////////////////////////FTPCLIENTCONRTOL//////////////////////////////
 SHAIFTP::FTPCLIENTCONTROL::FTPCLIENTCONTROL(
@@ -120,7 +120,9 @@ void SHAIFTP::FTPCLIENTCONTROL::setFtpCommand(std::u8string command){
     #endif
 }
 
-bool SHAIFTP::FTPCLIENTCONTROL::login(){
+unsigned short SHAIFTP::FTPCLIENTCONTROL::getFtpCommandLength(){return ftpCommandLength;}
+
+void SHAIFTP::FTPCLIENTCONTROL::login(){
     if(user!= u8"anonymous"){
         std::u8string command{u8"USER "+user};
         this->setFtpCommand(command);
@@ -147,7 +149,10 @@ bool SHAIFTP::FTPCLIENTCONTROL::login(){
     std::cout<<std::endl;
     #endif
     char code[]{"230"};
-    return checkReponseCode(code);
+    if(!checkReponseCode(code)){
+        exception.code=20;exception.errorStr="Login error";
+        throw exception;
+    }
 }
 
 unsigned int SHAIFTP::FTPCLIENTCONTROL::enterPASV(){
@@ -157,7 +162,10 @@ unsigned int SHAIFTP::FTPCLIENTCONTROL::enterPASV(){
     this->sockRec();
     writeResponseCode(recBuff.get());
     std::string code{"227"};
-    if(!checkReponseCode(code.data()))throw 9;
+    if(!checkReponseCode(code.data())){
+        exception.code=21;exception.errorStr="Enter passive mode error";
+        throw exception;
+    }
     #ifdef DEBUG
     printRecBuff();
     #endif
@@ -197,9 +205,7 @@ unsigned int SHAIFTP::FTPCLIENTCONTROL::enterPASV(){
     this->resetRecBuff();
     return port;
 }
-
-char* SHAIFTP::FTPCLIENTCONTROL::getRecBuff(){return recBuff.get();}
-unsigned short SHAIFTP::FTPCLIENTCONTROL::getFtpCommandLength(){return ftpCommandLength;}
+void SHAIFTP::FTPCLIENTCONTROL::enterBinaryMode(){}
 
 void SHAIFTP::FTPCLIENTCONTROL::writeResponseCode(char* responseCodeToWrite){
     for(unsigned short c{0};c<3;++c)responseCode[c]=responseCodeToWrite[c];
@@ -210,6 +216,39 @@ bool SHAIFTP::FTPCLIENTCONTROL::checkReponseCode(char* codeToCheck){
     return isEqual;
 }
 char* SHAIFTP::FTPCLIENTCONTROL::getResponseCode(){return responseCode;}
+
+bool SHAIFTP::FTPCLIENTCONTROL::confirmFileSizeTransfer(const std::u8string& serverPath, const std::wstring& localFilePath){
+    this->resetRecBuff();
+    unsigned long long localFileSize{};
+    try{localFileSize = std::filesystem::file_size(localFilePath);}
+    catch(std::filesystem::filesystem_error& e) {return 0;}
+    std::u8string command {u8"SIZE "+serverPath};
+    this->setFtpCommand(command);
+    this->sockSend(ftpCommandLength);
+    this->sockRec();
+    this->writeResponseCode(recBuff.get());
+    char serverFileSize[21]{};unsigned short index{0};
+    for(unsigned short c{4};((recBuff.get()[c]!='\r')&&(recBuff.get()[c]!='\n'));++c){
+        serverFileSize[index]=recBuff.get()[c];++index;
+    }
+    std::string localFileSizeStr{std::to_string(localFileSize)};
+    #ifdef DEBUG
+    std::cout<<"Server file size "<<serverFileSize<<"\nLocal file size  "<<localFileSizeStr<<std::endl;
+    #endif
+    this->resetRecBuff();
+    return SHAIFTP::FTPCLIENTCONTROL::compareStrToCharStr(localFileSizeStr,serverFileSize);
+}
+bool SHAIFTP::FTPCLIENTCONTROL::compareStrToCharStr(std::string str,char* charStr){
+    unsigned short index{0};
+    while(index<str.size()){
+        if(str[index]!=charStr[index])return 0;
+        ++index;
+    }
+    if(charStr[index]=='\0')return 1;
+    else return 0;
+}
+
+char* SHAIFTP::FTPCLIENTCONTROL::getRecBuff(){return recBuff.get();}
 /////////////////////////////FTPCLIENTCONRTOL//////////////////////////////
 
 
@@ -251,11 +290,17 @@ void SHAIFTP::FTPCLIENTDATA::setLocalPath(std::wstring& localPath){
     //if(this->downloadToPath.back()!=L'\\')this->downloadToPath.push_back(L'\\');
 }
 
-void SHAIFTP::FTPCLIENTDATA::getFile(){
+bool SHAIFTP::FTPCLIENTDATA::getFile(){
     #ifdef DEBUG
     std::cout<<"Downloading file"<<std::endl;
     #endif
     std::ofstream oFileStream{localPath,std::ios::binary};
+    if(!oFileStream.is_open()){
+        #ifdef DEBUG
+        std::cout<<"Failed to open local file stream"<<std::endl;
+        #endif
+        return 0;
+    }
     int bytesRec;
     do{
         bytesRec = recv(sock,recBuff.get(),recBuffSize,0);
@@ -264,16 +309,23 @@ void SHAIFTP::FTPCLIENTDATA::getFile(){
     while (bytesRec>=1);
     oFileStream.close();
     this->resetRecBuff();
+    return 1;
 }
 
-void SHAIFTP::FTPCLIENTDATA::putFile(){
+bool SHAIFTP::FTPCLIENTDATA::putFile(){
     #ifdef DEBUG
     std::cout<<"Uploading file"<<std::endl;
     #endif
     std::ifstream iFileStream{localPath,std::ios::binary|std::ios::ate};
+    if(!iFileStream.is_open()) {
+        #ifdef DEBUG
+        std::cout<<"Failed to open local file"<<std::endl;
+        #endif
+        return 0;
+    }
     unsigned long long fileSize{static_cast<unsigned long long>(iFileStream.tellg())};
     #ifdef DEBUG
-    std::cout<<"File size: "<< fileSize<<std::endl;
+    std::cout<<"File size: "<<fileSize<<std::endl;
     #endif
     iFileStream.seekg(std::ios::beg,std::ios::beg);
     #ifdef DEBUG
@@ -294,6 +346,7 @@ void SHAIFTP::FTPCLIENTDATA::putFile(){
     #endif
     iFileStream.close();
     //this->close();
+    return 1;
 }
 
 void SHAIFTP::FTPCLIENTDATA::printRecBuffBase10(){
@@ -321,7 +374,7 @@ ftpClientControl{
     ftpClientControl.printRecBuff();
     ftpClientControl.resetRecBuff();
     #endif
-    if(!ftpClientControl.login())throw 8;
+    ftpClientControl.login();
 }
 SHAIFTP::FTPCLIENT::FTPCLIENT(const std::wstring domain,DOMAINFLAG flag,unsigned int port):
 version{SHAISOCK::WINSOCKVERSION::TwoTwo},
@@ -341,7 +394,7 @@ ftpClientControl{
     ftpClientControl.printRecBuff();
     ftpClientControl.resetRecBuff();
     #endif
-    if(!ftpClientControl.login())throw 8;
+    ftpClientControl.login();
 }
 SHAIFTP::FTPCLIENT::FTPCLIENT(
     const std::wstring serverIpAddress,
@@ -363,7 +416,7 @@ ftpClientControl{
     ftpClientControl.printRecBuff();
     ftpClientControl.resetRecBuff();
     #endif
-    if(!ftpClientControl.login())throw 8;
+    ftpClientControl.login();
 }
 SHAIFTP::FTPCLIENT::FTPCLIENT(
     const std::wstring domain,
@@ -386,7 +439,7 @@ ftpClientControl{
     ftpClientControl.printRecBuff();
     ftpClientControl.resetRecBuff();
     #endif
-    if(!ftpClientControl.login())throw 8;
+    ftpClientControl.login();
 }
 SHAIFTP::FTPCLIENT::~FTPCLIENT(){
     std::u8string command{u8"QUIT"};
@@ -399,12 +452,18 @@ SHAIFTP::FTPCLIENT::~FTPCLIENT(){
     #endif
 }
 
-//Errors return -1 and -2
-//Returns 1 on success
+//Errors
+//-1 - Failed to enter PASV
+//-2 - Failed to retrieve file
+//-3 - Failed to complete file transfer
+//-4 - Failed file size comparison
+//Success
+//1
 short SHAIFTP::FTPCLIENT::getFile(
     const std::u8string pathFromServer,
     const std::wstring localTargetPath
-){  
+){ 
+    //enter binary mode
     std::u8string command = u8"TYPE I";
     ftpClientControl.setFtpCommand(command);
     ftpClientControl.sockSend(ftpClientControl.getFtpCommandLength());
@@ -413,7 +472,18 @@ short SHAIFTP::FTPCLIENT::getFile(
     ftpClientControl.printRecBuff();
     ftpClientControl.resetRecBuff();
 
-    unsigned int port{ftpClientControl.enterPASV()};
+    //enter passive mode
+    unsigned int port;
+    try{port = ftpClientControl.enterPASV();}
+    catch(const SHAISOCK::EXCEPTION& error){
+        #ifdef DEBUG
+        std::cerr <<"Exception thrown: "<<error.code<<" ; "<<error.errorStr<<std::endl;
+        #endif
+        return -1;
+    }
+
+    
+    //create data socket connection
     FTPCLIENTDATA ftpClientData{
         version,
         SHAISOCK::ADDRESSFAMILY::SHAISOCK_AF_INET,
@@ -425,6 +495,8 @@ short SHAIFTP::FTPCLIENT::getFile(
         16777216,
         8,
     };
+
+    
     //command to retrieve file
     command = u8"RETR "+pathFromServer;
     ftpClientControl.setFtpCommand(command);
@@ -436,12 +508,12 @@ short SHAIFTP::FTPCLIENT::getFile(
     ftpClientControl.printRecBuff();
     #endif
     ftpClientControl.resetRecBuff();
-    if(!ftpClientControl.checkReponseCode(code.data()))return -1;
+    if(!ftpClientControl.checkReponseCode(code.data()))return -2;
     
     //download file
     ftpClientData.getFile();
     
-    //check command to for successful transfer
+    //check for successful transfer
     ftpClientControl.sockRec();
     ftpClientControl.writeResponseCode(ftpClientControl.getRecBuff());
     #ifdef DEBUG
@@ -449,16 +521,37 @@ short SHAIFTP::FTPCLIENT::getFile(
     #endif
     ftpClientControl.resetRecBuff();
     code = "226";
-    if(!ftpClientControl.checkReponseCode(code.data()))return -2;
+    if(!ftpClientControl.checkReponseCode(code.data()))return -3;
+
+    if(!ftpClientControl.confirmFileSizeTransfer(pathFromServer,localTargetPath)){
+        #ifdef DEBUG
+        std::cout<<"File sizes don't match"<<std::endl;
+        #endif    
+        return -4;
+    }
+    #ifdef DEBUG
+    std::cout<<"File sizes match"<<std::endl;
+    #endif
     return 1;
 }
 
+//Errors
+//-1 - Failed to enter PASV
+//-2 - Failed to prepare for opening data connection
+//-3 - Failed to open local file
+//-4 - Failed to complete file transfer
+//-5 - Failed file size comparison
+//Success
+//1
 short SHAIFTP::FTPCLIENT::putFile(
     const std::wstring localPath, 
     const std::u8string serverPath
 ){
+    std::string code{"150"};
+    bool success{1};
     //ftpclientdata in its own scope to destruct at correct time
     {   
+        //enter binary mode
         std::u8string command = u8"TYPE I";
         ftpClientControl.setFtpCommand(command);
         ftpClientControl.sockSend(ftpClientControl.getFtpCommandLength());
@@ -467,7 +560,18 @@ short SHAIFTP::FTPCLIENT::putFile(
         ftpClientControl.printRecBuff();
         ftpClientControl.resetRecBuff();
         
-        unsigned int port{ftpClientControl.enterPASV()};
+        //enter passive mode
+        unsigned int port;
+        try{port = ftpClientControl.enterPASV();}
+        catch(const SHAISOCK::EXCEPTION& error){
+            #ifdef DEBUG
+            std::cerr <<"Exception thrown: "<<error.code<<" ; "<<error.errorStr<<std::endl;
+            #endif
+            return -1;
+        }
+
+
+        //create data socket connection
         FTPCLIENTDATA ftpClientData{
             version,
             SHAISOCK::ADDRESSFAMILY::SHAISOCK_AF_INET,
@@ -479,31 +583,39 @@ short SHAIFTP::FTPCLIENT::putFile(
             8,
             16777216
         };
-        
+
+
+        //command to store file
         command = (u8"STOR "+serverPath);
         ftpClientControl.setFtpCommand(command);
         ftpClientControl.sockSend(ftpClientControl.getFtpCommandLength());
         ftpClientControl.sockRec();
         ftpClientControl.writeResponseCode(ftpClientControl.getRecBuff());
+        if(!ftpClientControl.checkReponseCode(code.data()))return -2;
         ftpClientControl.printRecBuff();
         ftpClientControl.resetRecBuff();
 
         //Upload file
-        ftpClientData.putFile();
+        success = ftpClientData.putFile();
     }
+    //checking for open local file error
+    if(!success) return -3;
     
+    //check for successful transfer
     ftpClientControl.sockRec();
     ftpClientControl.writeResponseCode(ftpClientControl.getRecBuff());
+    code = "226";
+    if(!ftpClientControl.checkReponseCode(code.data()))return -4;
     ftpClientControl.printRecBuff();
-    ftpClientControl.resetRecBuff();
-
-    std::u8string command{u8"SIZE "+serverPath};
-    ftpClientControl.setFtpCommand(command);
-    ftpClientControl.sockSend(ftpClientControl.getFtpCommandLength());
-    ftpClientControl.sockRec();
-    ftpClientControl.writeResponseCode(ftpClientControl.getRecBuff());
-    ftpClientControl.printRecBuff();
-    ftpClientControl.resetRecBuff();
+    if(!ftpClientControl.confirmFileSizeTransfer(serverPath,localPath)){
+        #ifdef DEBUG
+        std::cout<<"File sizes don't match"<<std::endl;
+        #endif    
+        return -5;
+    }
+    #ifdef DEBUG
+    std::cout<<"File sizes match"<<std::endl;
+    #endif
 
     return 1;
 }
