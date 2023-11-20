@@ -11,3 +11,6 @@ Basic Usage:
 
 3. Upload file:
     ftpClient.putFile(source[wstring],destination[u8 string]);
+
+4. Download folder:
+	ftpClient.getDir(source[u8 string],destination[u8string]);

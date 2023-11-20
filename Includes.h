@@ -7,7 +7,9 @@
 #define NOCOMM
 #define NOMINMAX
 #define DEBUG
+//#define DEBUG2
 #define LOG
+#define MAXCHILDITEMS 500
 //#define BUFFBYTES
 
 #include <iostream>
@@ -15,6 +17,7 @@
 #include <sstream>
 #include <iomanip>
 #include <string>
+#include <vector>
 #include <filesystem>
 #include <memory>
 #include "Windows.h"
