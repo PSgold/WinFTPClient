@@ -865,8 +865,9 @@ short SHAIFTP::FTPCLIENT::putFile(
 //-4 - Failed to get some files
 //Success
 //1
-short SHAIFTP::FTPCLIENT::getDir(const std::u8string dirPath, std::u8string destination){
+short SHAIFTP::FTPCLIENT::getDir(std::u8string dirPath, std::u8string destination){
     //enter binary mode
+    if (dirPath.back()==u8'\\'||dirPath.back()==u8'/')dirPath.pop_back();
     std::wstring dirPathW{str8ToStrW(dirPath)};
     unsigned short indexToLastDir{returnIndexLastDirW(dirPathW)};
     unsigned short indexToDestLastDirU8{returnIndexLastDirU8(dirPath)};
@@ -1014,6 +1015,7 @@ short SHAIFTP::FTPCLIENT::getDir(const std::u8string dirPath, std::u8string dest
             indexToDestLastDirU8,
             (dirChildItemArray[c].str.size() - indexToDestLastDirU8)
         ));
+        std::filesystem::create_directory(localDirPath);
     }
     
     //Download files looping through file array

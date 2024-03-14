@@ -170,7 +170,7 @@ namespace SHAIFTP{
         ~FTPCLIENT();
         short getFile(const std::u8string pathFromServer,const std::wstring localTargetPath);
         short putFile(const std::wstring localPath,const std::u8string serverPath);
-        short getDir(const std::u8string dirPath,std::u8string destination);
+        short getDir(std::u8string dirPath,std::u8string destination);
         short putDir(std::u8string& localDir, std::u8string targetPath=u8"/");
         short getFeatures();
         short makeDir(std::u8string& dirPath);
