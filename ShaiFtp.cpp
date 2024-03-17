@@ -291,30 +291,32 @@ bool SHAIFTP::FTPCLIENTCONTROL::mkDir(std::u8string& dirPath){
 bool SHAIFTP::FTPCLIENTCONTROL::list(const std::u8string dirPath){
     std::cout<<"TESTING BUFF OUT: "<<reinterpret_cast<const char*>(dirPath.data())<<'\n';
     resetRecBuff();
-    //std::u8string command{u8"LIST "+dirPath};
     std::u8string command{u8"NLST "+dirPath};
     setFtpCommand(command);
     sockSend(ftpCommandLength);
     sockRec();
     writeResponseCode(recBuff.get());
+    std::string code{"150"};
     #ifdef DEBUG
     printRecBuff();
     #endif
     resetRecBuff();
+    return checkReponseCode(code.data());
 }
 
 bool SHAIFTP::FTPCLIENTCONTROL::listFull(const std::u8string dirPath){
     resetRecBuff();
     std::u8string command{u8"LIST "+dirPath};
-    //std::u8string command{u8"NLST "+dirPath};
     setFtpCommand(command);
     sockSend(ftpCommandLength);
     sockRec();
     writeResponseCode(recBuff.get());
+    std::string code{"150"};
     #ifdef DEBUG
     printRecBuff();
     #endif
     resetRecBuff();
+    return checkReponseCode(code.data());
 }
 
 void SHAIFTP::FTPCLIENTCONTROL::writeListToArray(){
@@ -861,8 +863,10 @@ short SHAIFTP::FTPCLIENT::putFile(
 //0 - Failed to get all files
 //-1 - Failed to enter Binary mode
 //-2 - Failed to enter PASV
-//-3 - Failed to get child items
-//-4 - Failed to get some files
+//-3 - Failed to retrieve list
+//-4 - Failed to retreive full list
+//-5 - Failed to get child items
+//-6 - Failed to get some files
 //Success
 //1
 short SHAIFTP::FTPCLIENT::getDir(std::u8string dirPath, std::u8string destination){
@@ -926,7 +930,7 @@ short SHAIFTP::FTPCLIENT::getDir(std::u8string dirPath, std::u8string destinatio
             port,
             localTargetPath
         };
-        ftpClientControl.list(dirPathLoop);
+        if(!ftpClientControl.list(dirPathLoop))return -3;
         #ifdef DEBUG
         std::cout<<"\nAFTER CALLL LIST"<<std::endl;
         #endif
@@ -954,7 +958,7 @@ short SHAIFTP::FTPCLIENT::getDir(std::u8string dirPath, std::u8string destinatio
             port,
             localTargetPath
         };
-        ftpClientControl.listFull(dirPathLoop);
+        if(!ftpClientControl.listFull(dirPathLoop))return -4;
 
         #ifdef DEBUG
         std::cout<<"Printing ChildItemArray:\n";
@@ -1035,7 +1039,7 @@ short SHAIFTP::FTPCLIENT::getDir(std::u8string dirPath, std::u8string destinatio
     }
     
     if(failureCount == fileChildItemArray.size())return 0;
-    if(failureCount>0)return -4;
+    if(failureCount>0)return -6;
     return 1;
 }
 

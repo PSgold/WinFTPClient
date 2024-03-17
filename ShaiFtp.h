@@ -112,8 +112,8 @@ namespace SHAIFTP{
             const std::wstring ipAddress,
             unsigned int port,
             const std::wstring& localPath,
-            unsigned int recBuffSize=1024,
-            unsigned int sendBuffSize=1024
+            unsigned int recBuffSize=16384,
+            unsigned int sendBuffSize=16384
         );
         ~FTPCLIENTDATA();
         void close();
